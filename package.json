@@ -6,10 +6,18 @@
   "license": "UNLICENSED",
   "private": true,
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@remotion/cli": "4.0.397",
+    "@remotion/google-fonts": "^4.0.397",
+    "dotenv": "^17.2.3",
+    "fs": "^0.0.1-security",
+    "get-audio-duration": "^4.0.1",
+    "google-tts-api": "^2.0.2",
+    "node-fetch": "^2.7.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "remotion": "4.0.397"
+    "remotion": "4.0.397",
+    "rss-parser": "^3.13.0"
   },
   "devDependencies": {
     "@remotion/eslint-config-flat": "4.0.397",
