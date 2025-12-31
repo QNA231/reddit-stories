@@ -1,40 +1,41 @@
-const { exec } = require('child_process');
+const { spawn } = require('child_process');
 const fs = require('fs');
+const path = require('path');
 
 // CẤU HÌNH
-const VIDEOS_TO_MAKE = 1;       // Số lượng video muốn làm trong phiên này
-const WAIT_TIME_MINUTES = 180;   // Thời gian nghỉ giữa các video (phút)
+const VIDEOS_TO_MAKE = 1;       // Số lượng video muốn làm
+const WAIT_TIME_MINUTES = 60;    // Thời gian nghỉ (phút)
 
-// Hàm chạy lệnh Terminal từ bên trong Node.js
-const runCommand = (command) => {
+// Hàm chạy lệnh bằng SPAWN (Khắc phục lỗi tràn bộ nhớ)
+const runCommand = (command, args) => {
     return new Promise((resolve, reject) => {
-        console.log(`\n> Đang chạy lệnh: ${command}`);
-        const process = exec(command);
+        console.log(`\n> Đang chạy lệnh: ${command} ${args.join(' ')}`);
+        
+        // 'inherit' giúp in log trực tiếp ra terminal, không qua bộ nhớ đệm
+        const child = spawn(command, args, { stdio: 'inherit', shell: true });
 
-        // Hiện log ra màn hình để bạn theo dõi
-        process.stdout.on('data', (data) => console.log(data.toString()));
-        process.stderr.on('data', (data) => console.error(data.toString()));
-
-        process.on('exit', (code) => {
+        child.on('close', (code) => {
             if (code === 0) resolve();
-            else reject(new Error(`Lỗi lệnh ${command}`));
+            else reject(new Error(`Lệnh thất bại với mã lỗi: ${code}`));
+        });
+        
+        child.on('error', (err) => {
+            reject(err);
         });
     });
 };
 
-// Hàm chờ đợi (Đếm ngược)
 const wait = (minutes) => {
     return new Promise(resolve => {
         console.log(`\n☕ Đã xong video! Máy sẽ nghỉ ngơi trong ${minutes} phút...`);
         let secondsLeft = minutes * 60;
-
         const timer = setInterval(() => {
             secondsLeft--;
-            process.stdout.write(`\r⏳ Còn lại: ${Math.floor(secondsLeft / 60)} phút ${secondsLeft % 60} giây...   `);
-
+            // Ghi đè dòng hiện tại để đếm ngược đẹp hơn
+            process.stdout.write(`\r⏳ Còn lại: ${Math.floor(secondsLeft / 60)}p ${secondsLeft % 60}s...   `);
             if (secondsLeft <= 0) {
                 clearInterval(timer);
-                console.log("\n\n🚀 Hết giờ nghỉ! Bắt đầu làm video tiếp theo.");
+                console.log("\n🚀 Tiếp tục!");
                 resolve();
             }
         }, 1000);
@@ -42,40 +43,36 @@ const wait = (minutes) => {
 };
 
 async function main() {
-    const startTime = new Date();
-    console.log(`=== BẮT ĐẦU TREO MÁY LÚC ${startTime.toLocaleTimeString()} ===`);
+    console.log(`=== START AUTO MANAGER (Fix Buffer Overflow) ===`);
 
     for (let i = 1; i <= VIDEOS_TO_MAKE; i++) {
-        console.log(`\n🎬 [VIDEO ${i}/${VIDEOS_TO_MAKE}] Đang khởi tạo...`);
+        console.log(`\n🎬 [VIDEO ${i}/${VIDEOS_TO_MAKE}]`);
 
         try {
-            // BƯỚC 1: TẠO NỘI DUNG (Chạy file free-generate.js)
-            await runCommand('node free-generate.js');
+            // BƯỚC 1: TẠO NỘI DUNG
+            await runCommand('node', ['free-generate.js']);
 
-            // BƯỚC 2: RENDER VIDEO (Chạy lệnh build của Remotion)
-            // Đặt tên file đầu ra theo thời gian để không bị trùng (vd: video_1530.mp4)
+            // BƯỚC 2: RENDER
             const timeStamp = new Date().getTime();
             const outputName = `out/video_${timeStamp}.mp4`;
+            
+            // Dùng cấu hình từ remotion.config.ts (Không cần --concurrency ở đây nữa)
+            await runCommand('npx', [
+                'remotion', 'render', 
+                'src/index.tsx', 
+                'MyRedditVideo', 
+                outputName
+            ]);
 
-            // Lưu ý: --concurrency=6 là tối ưu cho máy i3-14100 RAM 16GB
-            // Thêm "MyRedditVideo" vào đây để Remotion biết cần render cái gì
-            await runCommand(`npx remotion render src/index.tsx MyRedditVideo ${outputName} --concurrency=2`);
+            console.log(`✅ [DONE] Video lưu tại: ${outputName}`);
 
-            console.log(`✅ [HOÀN TẤT VIDEO ${i}] File lưu tại: ${outputName}`);
-
-            // BƯỚC 3: NGHỈ NGƠI (Nếu chưa phải video cuối cùng)
-            if (i < VIDEOS_TO_MAKE) {
-                await wait(WAIT_TIME_MINUTES);
-            }
+            if (i < VIDEOS_TO_MAKE) await wait(WAIT_TIME_MINUTES);
 
         } catch (error) {
-            console.error("❌ CÓ LỖI XẢY RA:", error);
-            // Nếu lỗi thì vẫn đợi 1 chút rồi thử video sau, không dừng hẳn
-            await wait(1);
+            console.error("\n❌ LỖI:", error.message);
+            await wait(1); // Đợi 1 phút rồi thử lại nếu lỗi
         }
     }
-
-    console.log("\n🎉🎉🎉 ĐÃ HOÀN THÀNH TẤT CẢ VIDEO! BẠN CÓ THỂ TẮT MÁY.");
 }
 
 main();
