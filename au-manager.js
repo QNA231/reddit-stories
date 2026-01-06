@@ -3,74 +3,86 @@ const fs = require('fs');
 const path = require('path');
 
 // CẤU HÌNH
-const VIDEOS_TO_MAKE = 1;       // Số lượng video muốn làm
-const WAIT_TIME_MINUTES = 60;    // Thời gian nghỉ (phút)
+const VIDEOS_TO_MAKE = 5;
+const WAIT_TIME_MINUTES = 5;
 
-// Hàm chạy lệnh bằng SPAWN (Khắc phục lỗi tràn bộ nhớ)
 const runCommand = (command, args) => {
     return new Promise((resolve, reject) => {
-        console.log(`\n> Đang chạy lệnh: ${command} ${args.join(' ')}`);
+        console.log(`\n> RUN: ${command} ...`); 
         
-        // 'inherit' giúp in log trực tiếp ra terminal, không qua bộ nhớ đệm
         const child = spawn(command, args, { stdio: 'inherit', shell: true });
-
-        child.on('close', (code) => {
-            if (code === 0) resolve();
-            else reject(new Error(`Lệnh thất bại với mã lỗi: ${code}`));
-        });
-        
-        child.on('error', (err) => {
-            reject(err);
-        });
+        child.on('close', code => code === 0 ? resolve() : reject(new Error(`Exit code: ${code}`)));
+        child.on('error', reject);
     });
 };
 
 const wait = (minutes) => {
     return new Promise(resolve => {
-        console.log(`\n☕ Đã xong video! Máy sẽ nghỉ ngơi trong ${minutes} phút...`);
-        let secondsLeft = minutes * 60;
-        const timer = setInterval(() => {
-            secondsLeft--;
-            // Ghi đè dòng hiện tại để đếm ngược đẹp hơn
-            process.stdout.write(`\r⏳ Còn lại: ${Math.floor(secondsLeft / 60)}p ${secondsLeft % 60}s...   `);
-            if (secondsLeft <= 0) {
-                clearInterval(timer);
-                console.log("\n🚀 Tiếp tục!");
-                resolve();
-            }
-        }, 1000);
+        console.log(`\n☕ Nghỉ ngơi ${minutes} phút...`);
+        setTimeout(resolve, minutes * 60 * 1000);
     });
 };
 
 async function main() {
-    console.log(`=== START AUTO MANAGER (Fix Buffer Overflow) ===`);
+    console.log(`=== AUTO MANAGER (FIX PROGRESS BAR) ===`);
 
     for (let i = 1; i <= VIDEOS_TO_MAKE; i++) {
-        console.log(`\n🎬 [VIDEO ${i}/${VIDEOS_TO_MAKE}]`);
-
         try {
-            // BƯỚC 1: TẠO NỘI DUNG
+            // 1. TẠO NỘI DUNG
             await runCommand('node', ['free-generate.js']);
-
-            // BƯỚC 2: RENDER
-            const timeStamp = new Date().getTime();
-            const outputName = `out/video_${timeStamp}.mp4`;
             
-            // Dùng cấu hình từ remotion.config.ts (Không cần --concurrency ở đây nữa)
+            const dataPath = path.resolve('./src/data.json');
+            const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+            const bgFileName = data.backgroundUrl || 'bg1.mp4';
+            const bgPath = path.resolve('./public', bgFileName);
+
+            const timeStamp = new Date().getTime();
+            const greenVideo = `out/temp_green_${timeStamp}.mp4`;
+            const finalVideo = `out/video_${timeStamp}.mp4`;
+
+            // 2. GIAI ĐOẠN 1: REMOTION RENDER
+            console.log("\n🟢 GĐ1: Render Chữ (Màn hình xanh)...");
+            
+            // --- ĐÃ XÓA '--quiet' ĐỂ HIỆN THANH TIẾN TRÌNH ---
             await runCommand('npx', [
-                'remotion', 'render', 
-                'src/index.tsx', 
-                'MyRedditVideo', 
-                outputName
+                'remotion', 'render', 'src/index.tsx', 'MyRedditVideo', greenVideo,
+                '--gl=angle',
+                '--concurrency=4',
+                '--jpeg-quality=80'
+                // Đã xóa dòng '--quiet' ở đây
             ]);
 
-            console.log(`✅ [DONE] Video lưu tại: ${outputName}`);
+            // 3. GIAI ĐOẠN 2: FFMPEG GHÉP VIDEO (Vẫn giữ im lặng cho gọn)
+            console.log("\n🟣 GĐ2: Đang ghép nền (Vui lòng đợi 1-2 phút)...");
+            
+            await runCommand('ffmpeg', [
+                '-hide_banner',       
+                '-loglevel', 'error', // Chỉ hiện lỗi
+                '-stream_loop', '-1',
+                
+                '-i', bgPath,
+                '-i', greenVideo,
+                '-filter_complex', '"[1:v]colorkey=0x00FF00:0.1:0.2[ckout];[0:v][ckout]overlay[out]"',
+                '-map', '[out]',
+                '-map', '1:a',
+                
+                '-c:v', 'libx264', 
+                '-preset', 'ultrafast', 
+                '-crf', '25',
+                '-shortest',
+                '-y',
+                finalVideo
+            ]);
+
+            console.log(`\n✅ XONG! Video lưu tại: ${finalVideo}`);
+
+            // 4. Dọn dẹp
+            if (fs.existsSync(greenVideo)) fs.unlinkSync(greenVideo);
 
             if (i < VIDEOS_TO_MAKE) await wait(WAIT_TIME_MINUTES);
 
         } catch (error) {
-            console.error("\n❌ LỖI:", error.message);
-            await wait(1); // Đợi 1 phút rồi thử lại nếu lỗi
+            console.error("❌ LỖI:", error.message);
         }
     }
 }

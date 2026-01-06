@@ -1,28 +1,35 @@
-import { registerRoot, Composition } from 'remotion';
+import { registerRoot } from 'remotion';
+import { Composition } from 'remotion';
 import { RedditStory } from './RedditStory';
-import data from './data.json';
+import jsonData from './data.json'; 
 
-export const RemotionRoot: React.FC = () => {
-    // Lấy tốc độ từ data (mặc định là 1 nếu không có)
-    const speed = data.videoSpeed || 1;
+export const RemotionVideo: React.FC = () => {
+    // Ép kiểu any cho data để lấy thông số thoải mái
+    const data: any = jsonData; 
+    const duration = data.durationInSeconds || 10; 
+    const fps = 30; 
 
-    // Tính toán lại tổng số Frame cần thiết
-    // Công thức: (Tổng giây / Tốc độ) * 30 fps
-    // Ví dụ: 100 giây / 1.5 tốc độ = 66 giây thực tế
-    const durationInFrames = Math.ceil((data.durationInSeconds / speed) * 60);
+    return (
+        <>
+            <Composition
+                id="MyRedditVideo"
+                
+                // --- SỬA DÒNG NÀY (Thêm 'as any') ---
+                // Điều này bảo TypeScript: "Đừng soi component này nữa, cứ chạy đi!"
+                component={RedditStory as any}
+                // ------------------------------------
 
-	return (
-		<>
-			<Composition
-				id="MyRedditVideo"
-				component={RedditStory}
-				durationInFrames={durationInFrames} // Đã co ngắn lại
-				fps={60}
-				width={1080}
-				height={1920}
-			/>
-		</>
-	);
+                durationInFrames={Math.ceil(duration * fps)}
+                fps={fps}
+                width={1080}
+                height={1920}
+                
+                defaultProps={{
+                    data: jsonData as any 
+                }}
+            />
+        </>
+    );
 };
 
-registerRoot(RemotionRoot);
+registerRoot(RemotionVideo);

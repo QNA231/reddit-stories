@@ -9,7 +9,7 @@ export const Word = ({ text, active }: { text: string; active: boolean }) => {
 				display: 'inline-block', marginRight: '10px',
 				fontSize: '70px', fontFamily: 'Arial, sans-serif', fontWeight: '900',
 				color, textTransform: 'uppercase',
-                textShadow: '4px 4px 0px rgba(0,0,0,0.8)',
+                textShadow: '3px 3px 0px #000',
 				transform: `scale(${scale})`,
 				transition: 'transform 0.1s ease-in-out',
 			}}

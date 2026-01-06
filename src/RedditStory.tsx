@@ -1,84 +1,95 @@
-import React from 'react';
-import { AbsoluteFill, Audio, Video, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
-import { Word } from './Word';
+import React, { useMemo } from 'react';
+import { AbsoluteFill, Audio, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
 import { Watermark } from './Watermark';
-import data from './data.json';
 
-export const RedditStory = () => {
-	const frame = useCurrentFrame();
-	const { fps } = useVideoConfig();
+// 1. Định nghĩa kiểu dữ liệu gốc (từ file json)
+interface Caption {
+    text: string;
+    startMs: number;
+    endMs: number;
+}
 
-    // 1. Lấy tốc độ mong muốn
-    const speed = data.videoSpeed || 1;
+// 2. Định nghĩa kiểu dữ liệu cho Cụm từ sau khi gom nhóm (Fix lỗi phrases)
+interface SubtitlePhrase {
+    text: string;
+    startFrame: number;
+    endFrame: number;
+}
 
-    // 2. Tính "Thời gian thực tế" vs "Thời gian trong kịch bản"
-    // currentTimeMs: Là thời gian đang trôi trên thanh timeline của trình dựng
-    const currentTimeMs = (frame / fps) * 1000;
-    
-    // adjustedTimeMs: Là thời gian đã trôi qua trong "thế giới nhanh"
-    // Ví dụ: Mới trôi qua 1 giây (currentTime), nhưng vì tua nhanh 1.5x 
-    // nên ta coi như đã đọc được 1.5 giây nội dung (adjustedTime).
-    const adjustedTimeMs = currentTimeMs * speed;
+interface RedditStoryProps {
+    data: {
+        audioUrl: string;
+        captions: Caption[];
+        backgroundUrl?: string; 
+    };
+}
 
-    // 3. Logic hiển thị chữ (Paging) - Dùng adjustedTimeMs để so sánh
-    const activeIndex = data.captions.findIndex(
-        c => adjustedTimeMs >= c.startMs && adjustedTimeMs <= c.endMs
-    );
-    
-    const currentWordIndex = activeIndex !== -1 
-        ? activeIndex 
-        : data.captions.filter(c => c.startMs < adjustedTimeMs).length - 1;
+export const RedditStory: React.FC<RedditStoryProps> = ({ data }) => {
+    const frame = useCurrentFrame();
+    const { fps } = useVideoConfig();
 
-    const WORDS_PER_PAGE = 12; // Số từ mỗi trang
-    const pageIndex = Math.floor(Math.max(0, currentWordIndex) / WORDS_PER_PAGE);
-    const startIndex = pageIndex * WORDS_PER_PAGE;
-    const visibleCaptions = data.captions.slice(startIndex, startIndex + WORDS_PER_PAGE);
+    const subtitlePhrases = useMemo(() => {
+        // --- FIX LỖI Ở ĐÂY: Khai báo rõ kiểu mảng là SubtitlePhrase[] ---
+        const phrases: SubtitlePhrase[] = []; 
+        
+        let currentPhrase: Caption[] = [];
+        const MAX_WORDS_PER_SCREEN = 12; 
 
-	return (
-		<AbsoluteFill style={{ backgroundColor: 'black' }}>
-            {/* VIDEO NỀN */}
-			<AbsoluteFill>
-                <Video 
-                    src={staticFile(data.backgroundUrl)}
-                    style={{ height: '100%', width: '100%', objectFit: 'cover' }}
-                    volume={0.1}
-                    loop
-                    // Tăng tốc video nền (Nếu muốn nền còn nhanh hơn giọng đọc thì nhân thêm, vd: speed * 1.2)
-                    playbackRate={speed} 
-                />
-                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.2)' }}></div>
-				
-				
-				{/* WATERMARK */}
-				<Watermark text="@RedditStories" />
-			</AbsoluteFill>
+        data.captions.forEach((word, index) => {
+            currentPhrase.push(word);
 
-            {/* AUDIO GIỌNG ĐỌC */}
-            {/* Thuộc tính playbackRate sẽ tua nhanh giọng đọc mà không làm méo tiếng (giữ cao độ) */}
-			<Audio 
-                src={staticFile(data.audioUrl)} 
-                playbackRate={speed} 
-            />
+            const hasPunctuation = /[.?!,;]/.test(word.text);
+            const isTooLong = currentPhrase.length >= MAX_WORDS_PER_SCREEN;
+            const isLastWord = index === data.captions.length - 1;
+
+            if (hasPunctuation || isTooLong || isLastWord) {
+                const startMs = currentPhrase[0].startMs;
+                const endMs = currentPhrase[currentPhrase.length - 1].endMs;
+                
+                phrases.push({
+                    text: currentPhrase.map(w => w.text).join(' '),
+                    startFrame: (startMs / 1000) * fps,
+                    endFrame: (endMs / 1000) * fps
+                });
+
+                currentPhrase = [];
+            }
+        });
+        return phrases;
+    }, [data.captions, fps]);
+
+    // Tìm cụm từ đang nói
+    const currentSubtitle = subtitlePhrases.find(phrase => {
+        return frame >= phrase.startFrame - 5 && frame <= phrase.endFrame + 5;
+    });
+
+    return (
+        <AbsoluteFill style={{ backgroundColor: '#00FF00' }}> 
             
-            {/* TIÊU ĐỀ */}
-            <AbsoluteFill style={{ top: 150, alignItems: 'center' }}>
-                <div style={{ backgroundColor: 'white', padding: '15px 30px', borderRadius: '15px', width: '85%', textAlign: 'center', boxShadow: '0 8px 20px rgba(0,0,0,0.5)', zIndex: 10 }}>
-                    <h2 style={{ margin: 0, fontSize: 26, fontFamily: 'Arial', color: '#B22222', fontWeight: 'bold', textTransform: 'uppercase' }}>
-                        {data.title}
-                    </h2>
+            <Audio src={staticFile(data.audioUrl)} />
+            <Watermark text="@RedditStories" />
+            <AbsoluteFill>
+                <div style={{
+                    position: 'absolute',
+                    top: 0, left: 0, width: '100%', height: '100%',
+                    display: 'flex', justifyContent: 'center', alignItems: 'center',
+                    padding: '60px',
+                    textAlign: 'center'
+                }}>
+                    <h1 style={{
+                        fontFamily: 'Arial, sans-serif',
+                        fontSize: '55px',
+                        color: 'white',
+                        textShadow: '3px 3px 0px black', 
+                        lineHeight: 1.5,
+                        maxWidth: '90%',
+                        wordBreak: 'keep-all'
+                    }}>
+                        {currentSubtitle ? currentSubtitle.text : ""}
+                    </h1>
                 </div>
             </AbsoluteFill>
-
-            {/* CHỮ CHẠY */}
-			<AbsoluteFill style={{ alignItems: 'end', height: 'auto', flexDirection: 'row' }}>
-				<div style={{ lineHeight: '1.6', textAlign: 'center', marginBottom: '123px', filter: 'drop-shadow(0px 4px 4px rgba(0,0,0,0.4))' }}>
-					{visibleCaptions.map((caption, index) => {
-                        // Logic hiển thị màu chữ cũng phải dựa trên adjustedTimeMs
-						const isActive = adjustedTimeMs >= caption.startMs && adjustedTimeMs <= caption.endMs;
-						return <Word key={startIndex + index} text={caption.text} active={isActive} />;
-					})}
-				</div>
-			</AbsoluteFill>
-		</AbsoluteFill>
-	);
+            
+        </AbsoluteFill>
+    );
 };

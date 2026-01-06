@@ -8,9 +8,11 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@remotion/cli": "4.0.397",
-    "@remotion/google-fonts": "^4.0.397",
+    "@vitalets/google-translate-api": "^9.2.1",
+    "axios": "^1.13.2",
     "dotenv": "^17.2.3",
     "fs": "^0.0.1-security",
+    "fs-extra": "^11.3.3",
     "get-audio-duration": "^4.0.1",
     "google-tts-api": "^2.0.2",
     "node-fetch": "^2.7.0",
