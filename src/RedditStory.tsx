@@ -2,14 +2,12 @@ import React, { useMemo } from 'react';
 import { AbsoluteFill, Audio, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
 import { Watermark } from './Watermark';
 
-// 1. Định nghĩa kiểu dữ liệu gốc (từ file json)
 interface Caption {
     text: string;
     startMs: number;
     endMs: number;
 }
 
-// 2. Định nghĩa kiểu dữ liệu cho Cụm từ sau khi gom nhóm (Fix lỗi phrases)
 interface SubtitlePhrase {
     text: string;
     startFrame: number;
@@ -29,15 +27,12 @@ export const RedditStory: React.FC<RedditStoryProps> = ({ data }) => {
     const { fps } = useVideoConfig();
 
     const subtitlePhrases = useMemo(() => {
-        // --- FIX LỖI Ở ĐÂY: Khai báo rõ kiểu mảng là SubtitlePhrase[] ---
         const phrases: SubtitlePhrase[] = []; 
-        
         let currentPhrase: Caption[] = [];
         const MAX_WORDS_PER_SCREEN = 12; 
 
         data.captions.forEach((word, index) => {
             currentPhrase.push(word);
-
             const hasPunctuation = /[.?!,;]/.test(word.text);
             const isTooLong = currentPhrase.length >= MAX_WORDS_PER_SCREEN;
             const isLastWord = index === data.captions.length - 1;
@@ -51,14 +46,12 @@ export const RedditStory: React.FC<RedditStoryProps> = ({ data }) => {
                     startFrame: (startMs / 1000) * fps,
                     endFrame: (endMs / 1000) * fps
                 });
-
                 currentPhrase = [];
             }
         });
         return phrases;
     }, [data.captions, fps]);
 
-    // Tìm cụm từ đang nói
     const currentSubtitle = subtitlePhrases.find(phrase => {
         return frame >= phrase.startFrame - 5 && frame <= phrase.endFrame + 5;
     });
@@ -67,13 +60,28 @@ export const RedditStory: React.FC<RedditStoryProps> = ({ data }) => {
         <AbsoluteFill style={{ backgroundColor: '#00FF00' }}> 
             
             <Audio src={staticFile(data.audioUrl)} />
-            <Watermark text="@RedditStories" />
-            <AbsoluteFill>
+
+            {/* Watermark giữ nguyên */}
+            <Watermark text="@KenhRedditCuaBan" />
+
+            {/* PHẦN HIỂN THỊ CHỮ CHÍNH */}
+            <AbsoluteFill style={{ zIndex: 20 }}>
                 <div style={{
                     position: 'absolute',
                     top: 0, left: 0, width: '100%', height: '100%',
-                    display: 'flex', justifyContent: 'center', alignItems: 'center',
-                    padding: '60px',
+                    display: 'flex', 
+                    
+                    // --- 1. CĂN CHỈNH VỊ TRÍ ---
+                    justifyContent: 'center', // Căn giữa theo chiều ngang
+                    alignItems: 'flex-end',   // Đẩy xuống phía dưới cùng (Thay vì 'center')
+                    
+                    // --- 2. KHOẢNG CÁCH AN TOÀN ---
+                    // paddingBottom: 350px là khoảng cách vàng cho TikTok/Shorts
+                    // (Tránh bị tiêu đề video và tên kênh che mất chữ)
+                    paddingBottom: '350px',   
+                    paddingLeft: '40px',      // Cách lề trái phải một chút
+                    paddingRight: '40px',
+                    
                     textAlign: 'center'
                 }}>
                     <h1 style={{
@@ -81,9 +89,10 @@ export const RedditStory: React.FC<RedditStoryProps> = ({ data }) => {
                         fontSize: '55px',
                         color: 'white',
                         textShadow: '3px 3px 0px black', 
-                        lineHeight: 1.5,
-                        maxWidth: '90%',
-                        wordBreak: 'keep-all'
+                        lineHeight: 1.4, // Giãn dòng nhẹ cho dễ đọc
+                        maxWidth: '100%',
+                        wordBreak: 'keep-all',
+                        margin: 0 // Xóa margin thừa
                     }}>
                         {currentSubtitle ? currentSubtitle.text : ""}
                     </h1>
