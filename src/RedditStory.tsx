@@ -62,7 +62,7 @@ export const RedditStory: React.FC<RedditStoryProps> = ({ data }) => {
             <Audio src={staticFile(data.audioUrl)} />
 
             {/* Watermark giữ nguyên */}
-            <Watermark text="@KenhRedditCuaBan" />
+            <Watermark text="@RedditStoriesVietNam" />
 
             {/* PHẦN HIỂN THỊ CHỮ CHÍNH */}
             <AbsoluteFill style={{ zIndex: 20 }}>
